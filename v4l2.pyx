@@ -727,7 +727,13 @@ cdef class Capture:
         controls = []
         control_type = {v4l2.V4L2_CTRL_TYPE_INTEGER:'int',
                         v4l2.V4L2_CTRL_TYPE_BOOLEAN:'bool',
-                        v4l2.V4L2_CTRL_TYPE_MENU:'menu'}
+                        v4l2.V4L2_CTRL_TYPE_MENU:'menu',
+                        v4l2.V4L2_CTRL_TYPE_BUTTON:'button',
+                        v4l2.V4L2_CTRL_TYPE_INTEGER64:'int64',
+                        v4l2.V4L2_CTRL_TYPE_CTRL_CLASS:'ctrlclass',
+                        v4l2.V4L2_CTRL_TYPE_STRING:'string',
+                        v4l2.V4L2_CTRL_TYPE_BITMASK:'bitmask',
+                        v4l2.V4L2_CTRL_TYPE_INTEGER_MENU:'intmenu'}
 
         while (0 == self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl)):
 
@@ -1037,7 +1043,7 @@ cdef class CaptureDragon:
                 raise Exception("Could not close sub-device. Handle: '%s'. Error: %d, %s\n"%(self.subdev_handle, errno, strerror(errno)))
             self.subdev_handle = -1
 
-
+    #Ok
     cdef verify_device(self):
         cdef v4l2.v4l2_capability cap
 
@@ -1046,14 +1052,9 @@ cdef class CaptureDragon:
                 raise Exception("%s is no V4L2 device\n"%self.dev_name)
             else:
                 raise Exception("Error during VIDIOC_QUERYCAP: %d, %s"%(errno, strerror(errno)))
-        
-        print('Cap:')
-        print(cap.capabilities & v4l2.V4L2_CAP_READWRITE)
-        print(cap.capabilities & v4l2.V4L2_CAP_ASYNCIO)
-        print(cap.capabilities & v4l2.V4L2_CAP_STREAMING)
 
         if not (cap.capabilities & v4l2.V4L2_CAP_VIDEO_CAPTURE_MPLANE):
-            raise Exception("%s is no video capture device"%self.dev_name)
+            raise Exception("%s is no video capture MPLANE device"%self.dev_name)
 
         if not (cap.capabilities & v4l2.V4L2_CAP_STREAMING):
             raise Exception("%s does not support streaming i/o"%self.dev_name)
@@ -1159,11 +1160,11 @@ cdef class CaptureDragon:
         if self.xioctl(v4l2.VIDIOC_S_FMT, &fmt) != 0:
             raise Exception("Could not set v4l2 format")
 
-    #Ready
+    #Ok
     cdef set_streamparm(self):
         print('Driver doesn\'t support VIDIOC_S_PARM')
        
-    #Ready
+    #Ok
     cdef get_format(self):
         cdef v4l2.v4l2_format fmt
         fmt.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
@@ -1174,11 +1175,11 @@ cdef class CaptureDragon:
             self._frame_size = fmt.fmt.pix_mp.width,fmt.fmt.pix_mp.height
             self._transport_format = fmt.fmt.pix_mp.pixelformat
 
-    #Ready
+    #Ok
     cdef get_streamparm(self):
         print('Driver doesn\'t support VIDIOC_G_PARM')
 
-    #Ready
+    #Ok
     property transport_formats:
         def __get__(self):
             cdef v4l2.v4l2_fmtdesc fmt
@@ -1196,7 +1197,7 @@ cdef class CaptureDragon:
         def __set__(self, val):
             raise Exception("Read Only")
 
-    #Ready
+    #Ok
     property frame_sizes:
         def __get__(self):
             self._frame_sizes = []
@@ -1206,7 +1207,7 @@ cdef class CaptureDragon:
         def __set__(self, val):
             raise Exception("Read Only")
 
-    #Ready
+    #Ok
     property frame_rates:
         def __get__(self):
             self._frame_rates = []
@@ -1260,9 +1261,15 @@ cdef class CaptureDragon:
         controls = []
         control_type = {v4l2.V4L2_CTRL_TYPE_INTEGER:'int',
                         v4l2.V4L2_CTRL_TYPE_BOOLEAN:'bool',
-                        v4l2.V4L2_CTRL_TYPE_MENU:'menu'}
+                        v4l2.V4L2_CTRL_TYPE_MENU:'menu',
+                        v4l2.V4L2_CTRL_TYPE_BUTTON:'button',
+                        v4l2.V4L2_CTRL_TYPE_INTEGER64:'int64',
+                        v4l2.V4L2_CTRL_TYPE_CTRL_CLASS:'ctrlclass',
+                        v4l2.V4L2_CTRL_TYPE_STRING:'string',
+                        v4l2.V4L2_CTRL_TYPE_BITMASK:'bitmask',
+                        v4l2.V4L2_CTRL_TYPE_INTEGER_MENU:'intmenu'}
 
-        while (self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0): # AQUI!
+        while (self.subxioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0):
             if v4l2.V4L2_CTRL_ID2CLASS(queryctrl.id) != v4l2.V4L2_CTRL_CLASS_CAMERA:
                 #we ignore this conditon
                 pass
@@ -1298,7 +1305,7 @@ cdef class CaptureDragon:
         querymenu.index = queryctrl.minimum
         menu = {}
         while querymenu.index <= queryctrl.maximum:
-            if self.xioctl(v4l2.VIDIOC_QUERYMENU, &querymenu) == 0:
+            if self.xioctl(v4l2.VIDIOC_QUERYMENU, &querymenu) == 0: # AQUI!
                 menu[querymenu.name] = querymenu.index
             querymenu.index += 1
         return menu
@@ -1308,7 +1315,7 @@ cdef class CaptureDragon:
         cdef v4l2.v4l2_control control
         control.id = control_id
         control.value = value
-        if self.xioctl(v4l2.VIDIOC_S_CTRL, &control) == -1: # AQUI!
+        if self.subxioctl(v4l2.VIDIOC_S_CTRL, &control) == -1:
             if errno == ERANGE:
                 logger.debug("Control out of range")
             else:
@@ -1318,7 +1325,7 @@ cdef class CaptureDragon:
     cpdef get_control(self, int control_id):
         cdef v4l2.v4l2_control control
         control.id = control_id
-        if self.xioctl(v4l2.VIDIOC_G_CTRL, &control) == -1: # AQUI!
+        if self.subxioctl(v4l2.VIDIOC_G_CTRL, &control) == -1:
             if errno == EINVAL:
                 logger.debug("Control is not supported")
             else:
