@@ -629,7 +629,7 @@ cdef class Capture:
         def __get__(self):
             cdef  v4l2.v4l2_frmsizeenum frmsize
             if self._frame_sizes is None:
-                frmsize.pixel_format = fourcc_u32(self.transport_format)
+                frmsize.pixel_format = fourcc_u32(self.transport_format.encode('utf-8'))
                 frmsize.index = 0
                 sizes = []
                 while self.xioctl(v4l2.VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0:
@@ -652,7 +652,7 @@ cdef class Capture:
             cdef v4l2.v4l2_frmivalenum interval
 
             if self._frame_rates is None:
-                interval.pixel_format = fourcc_u32(self.transport_format)
+                interval.pixel_format = fourcc_u32(self.transport_format.encode('utf-8'))
                 interval.width,interval.height = self.frame_size
                 interval.index = 0
                 self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS,&interval)
@@ -1182,20 +1182,8 @@ cdef class CaptureDragon:
             self._buffer_active = False
             logger.debug("Buffers deinitialized")
 
-
+    #Ready
     cdef set_format(self):
-        # cdef v4l2.v4l2_format  format
-        # format.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-        # format.fmt.pix.width       = self.frame_size[0]
-        # format.fmt.pix.height      = self.frame_size[1]
-        # format.fmt.pix.pixelformat = self._transport_format
-
-        # format.fmt.pix.field       = v4l2.V4L2_FIELD_ANY
-        # if self.xioctl(v4l2.VIDIOC_S_FMT, &format) == -1:
-        #     self.close()
-        #     raise Exception("Could not set v4l2 format")
-
-
         cdef v4l2.v4l2_format fmt
 
         fmt.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
@@ -1207,45 +1195,47 @@ cdef class CaptureDragon:
         if self.xioctl(v4l2.VIDIOC_S_FMT, &fmt) != 0:
             raise Exception("Could not set v4l2 format")
 
+    #Ready
     cdef set_streamparm(self):
-        cdef v4l2.v4l2_streamparm streamparm
-        streamparm.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-        streamparm.parm.capture.timeperframe.numerator = self.frame_rate[0]
-        streamparm.parm.capture.timeperframe.denominator = self.frame_rate[1]
-        if self.xioctl(v4l2.VIDIOC_S_PARM, &streamparm) == -1:
+        cdef v4l2.v4l2_streamparm parm
+        parm.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+        parm.parm.capture.timeperframe.numerator = self.frame_rate[0]
+        parm.parm.capture.timeperframe.denominator = self.frame_rate[1]
+        if self.xioctl(v4l2.VIDIOC_S_PARM, &parm) == -1:
             self.close()
             raise Exception("Could not set v4l2 parameters")
        
-
+    #Ready
     cdef get_format(self):
-        cdef v4l2.v4l2_format format
-        format.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-        if self.xioctl(v4l2.VIDIOC_G_FMT, &format) == -1:
+        cdef v4l2.v4l2_format fmt
+        fmt.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+        if self.xioctl(v4l2.VIDIOC_G_FMT, &fmt) == -1:
             self.close()
             raise Exception("Could not get v4l2 format")
         else:
-            self._frame_size = format.fmt.pix.width,format.fmt.pix.height
-            self._transport_format = format.fmt.pix.pixelformat
+            self._frame_size = fmt.fmt.pix_mp.width,fmt.fmt.pix_mp.height
+            self._transport_format = fmt.fmt.pix_mp.pixelformat
 
+    #Ready
     cdef get_streamparm(self):
-        cdef v4l2.v4l2_streamparm streamparm
-        streamparm.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-        if self.xioctl(v4l2.VIDIOC_G_PARM, &streamparm) == -1:
+        cdef v4l2.v4l2_streamparm parm
+        parm.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+        if self.xioctl(v4l2.VIDIOC_G_PARM, &parm) == -1:
             self.close()
             raise Exception("Could not get v4l2 parameters")
         else:
-            self._frame_rate = streamparm.parm.capture.timeperframe.numerator,streamparm.parm.capture.timeperframe.denominator
+            self._frame_rate = parm.parm.capture.timeperframe.numerator,parm.parm.capture.timeperframe.denominator
 
-
+    #Ready
     property transport_formats:
         def __get__(self):
             cdef v4l2.v4l2_fmtdesc fmt
             if self._transport_formats is None:
-                fmt.type =  v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+                fmt.type =  v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
                 fmt.index = 0
                 formats = []
-                while self.xioctl(v4l2.VIDIOC_ENUM_FMT,&fmt)>=0:
-                    formats.append( fourcc_string(fmt.pixelformat ) )
+                while self.xioctl(v4l2.VIDIOC_ENUM_FMT, &fmt) >= 0:
+                    formats.append(fourcc_string(fmt.pixelformat))
                     fmt.index += 1
                 logger.debug("Reading Transport formats: %s"%formats)
                 self._transport_formats = formats
@@ -1254,21 +1244,21 @@ cdef class CaptureDragon:
         def __set__(self,val):
             raise Exception("Read Only")
 
-
+    #Ready
     property frame_sizes:
         def __get__(self):
             cdef  v4l2.v4l2_frmsizeenum frmsize
             if self._frame_sizes is None:
-                frmsize.pixel_format = fourcc_u32(self.transport_format)
+                frmsize.pixel_format = fourcc_u32(self.transport_format.encode('utf-8'))
                 frmsize.index = 0
                 sizes = []
                 while self.xioctl(v4l2.VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0:
                     if frmsize.type == v4l2.V4L2_FRMSIZE_TYPE_DISCRETE:
-                        sizes.append((frmsize.discrete.width,frmsize.discrete.height))
+                        sizes.append((frmsize.discrete.width, frmsize.discrete.height))
                     elif frmsize.type == v4l2.V4L2_FRMSIZE_TYPE_STEPWISE:
-                        sizes.append( (frmsize.stepwise.max_width, frmsize.stepwise.max_height) )
-                    frmsize.index+=1
-                logger.debug("Reading frame sizes@'%s': %s"%(self.transport_format,sizes) )
+                        sizes.append((frmsize.stepwise.max_width, frmsize.stepwise.max_height))
+                    frmsize.index += 1
+                logger.debug("Reading frame sizes@'%s': %s"%(self.transport_format, sizes) )
                 self._frame_sizes = sizes 
 
             return self._frame_sizes
@@ -1276,19 +1266,19 @@ cdef class CaptureDragon:
         def __set__(self,val):
             raise Exception("Read Only")
 
-
+    #Ready
     property frame_rates:
         def __get__(self):
             cdef v4l2.v4l2_frmivalenum interval
 
             if self._frame_rates is None:
-                interval.pixel_format = fourcc_u32(self.transport_format)
+                interval.pixel_format = fourcc_u32(self.transport_format.encode('utf-8'))
                 interval.width,interval.height = self.frame_size
                 interval.index = 0
-                self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS,&interval)
+                self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS, &interval)
                 rates = []
                 if interval.type == v4l2.V4L2_FRMIVAL_TYPE_DISCRETE:
-                    while self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS,&interval) >= 0:
+                    while self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS, &interval) >= 0:
                         rates.append((interval.discrete.numerator,interval.discrete.denominator))
                         interval.index += 1
                 #non-discreete rates are very seldom, the second and third case should never happen
@@ -1299,8 +1289,8 @@ cdef class CaptureDragon:
                         stepval = 1
                     else:
                         stepval = float(interval.stepwise.step.numerator)/interval.stepwise.step.denominator
-                    rates = range(minval,maxval,stepval)
-                logger.debug("Reading frame rates@'%s'@%s: %s"%(self.transport_format,self.frame_size,rates) )
+                    rates = range(minval, maxval, stepval)
+                logger.debug("Reading frame rates@'%s'@%s: %s"%(self.transport_format, self.frame_size, rates))
                 self._frame_rates = rates
 
             return self._frame_rates
@@ -1308,7 +1298,7 @@ cdef class CaptureDragon:
         def __set__(self,val):
             raise Exception("Read Only")
 
-
+    #Ready
     property transport_format:
         def __get__(self):
             return fourcc_string(self._transport_format)
@@ -1324,7 +1314,7 @@ cdef class CaptureDragon:
             self._frame_sizes = None
             self._frame_rates = None
 
-
+    #Ready
     property frame_size:
         def __get__(self):
             return self._frame_size
@@ -1338,6 +1328,7 @@ cdef class CaptureDragon:
             self.set_streamparm()
             self.get_streamparm()
 
+    #Ready
     property frame_rate:
         def __get__(self):
             return self._frame_rate
@@ -1348,9 +1339,7 @@ cdef class CaptureDragon:
             self.set_streamparm()
             self.get_streamparm()
 
-
-
-
+    #Ready
     def enum_controls(self):
         cdef v4l2.v4l2_queryctrl queryctrl
         queryctrl.id = v4l2.V4L2_CTRL_CLASS_USER | v4l2.V4L2_CTRL_FLAG_NEXT_CTRL
@@ -1359,8 +1348,7 @@ cdef class CaptureDragon:
                         v4l2.V4L2_CTRL_TYPE_BOOLEAN:'bool',
                         v4l2.V4L2_CTRL_TYPE_MENU:'menu'}
 
-        while (0 == self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl)):
-
+        while (self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0):
             if v4l2.V4L2_CTRL_ID2CLASS(queryctrl.id) != v4l2.V4L2_CTRL_CLASS_CAMERA:
                 #we ignore this conditon
                 pass
@@ -1424,6 +1412,7 @@ cdef class CaptureDragon:
 
 ###Utiliy functions
 
+#Ready
 def list_devices():
     file_names = [x for x in oslistdir("/dev") if x.startswith("video")]
     file_names.sort()
@@ -1438,9 +1427,7 @@ def list_devices():
             logger.error("Could not get device info for %s"%path)
     return devices
 
-
-
-
+#Ready
 cdef class Cap_Info:
     """
     Video Capture class used to make device list.
@@ -1449,13 +1436,12 @@ cdef class Cap_Info:
     cdef int dev_handle
     cdef bytes dev_name
 
-    def __cinit__(self,dev_name):
+    def __cinit__(self, dev_name):
         pass
 
-    def __init__(self,dev_name):
+    def __init__(self, dev_name):
         self.dev_name = dev_name
         self.dev_handle = self.open_device()
-
 
     def close(self):
         self.close_device()
@@ -1466,7 +1452,7 @@ cdef class Cap_Info:
 
     def get_info(self):
         cdef v4l2.v4l2_capability caps
-        if self.xioctl(v4l2.VIDIOC_QUERYCAP,&caps) !=0:
+        if self.xioctl(v4l2.VIDIOC_QUERYCAP, &caps) !=0:
             raise Exception("VIDIOC_QUERYCAP error. Could not get devices info.")
 
         return {'dev_path':self.dev_name,'driver':caps.driver,'dev_name':caps.card,'bus_info':caps.bus_info}
@@ -1482,13 +1468,13 @@ cdef class Cap_Info:
     cdef open_device(self):
         cdef stat.struct_stat st
         cdef int dev_handle = -1
-        if -1 == stat.stat(<char *>self.dev_name, &st):
+        if stat.stat(<char *> self.dev_name, &st) == -1:
             raise Exception("Cannot find '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno) ))
         if not stat.S_ISCHR(st.st_mode):
             raise Exception("%s is no device\n"%self.dev_name)
 
         dev_handle = fcntl.open(<char *>self.dev_name, fcntl.O_RDWR | fcntl.O_NONBLOCK, 0)
-        if -1 == dev_handle:
+        if dev_handle == -1:
             raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno) ))
         return dev_handle
 
@@ -1504,11 +1490,13 @@ def get_sys_time_monotonic():
     time.clock_gettime(time.CLOCK_MONOTONIC, &t)
     return t.tv_sec + <double>t.tv_nsec * 1e-9
 
+#Ready
 def fourcc_string(i):
     s = chr(i & 255)
     for shift in (8,16,24):
         s += chr(i>>shift & 255)
     return s
 
+#Ready
 cpdef v4l2.__u32 fourcc_u32(char * fourcc):
     return v4l2.v4l2_fourcc(fourcc[0],fourcc[1],fourcc[2],fourcc[3])
