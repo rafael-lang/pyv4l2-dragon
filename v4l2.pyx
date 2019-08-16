@@ -907,7 +907,7 @@ cdef class CaptureDragon:
 
 
 
-        self.verify_device()
+        #self.verify_device()
         self.get_format()
         self.get_streamparm()
 
