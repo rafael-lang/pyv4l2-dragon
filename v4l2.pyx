@@ -801,8 +801,10 @@ cdef class CaptureDragon:
 
     All controls are exposed and can be enumerated using the controls list.
     """
-    cdef int dev_handle 
+    cdef int dev_handle
+    cdef int subdev_handle
     cdef bytes dev_name
+    cdef bytes subdev_name
     cdef bint _camera_streaming, _buffers_initialized
     cdef object _transport_formats, _frame_rates,_frame_sizes
     cdef object  _frame_rate, _frame_size # (rate_num,rate_den), (width,height)
@@ -815,97 +817,17 @@ cdef class CaptureDragon:
 
     cdef turbojpeg.tjhandle tj_context
 
-    def __cinit__(self,dev_name):
+    #Ok
+    def __cinit__(self, dev_name, subdev_name):
         pass
 
-    def __init__(self,dev_name):
-        cdef v4l2.v4l2_requestbuffers req
-        cdef v4l2.v4l2_format fmt
-        
+    def __init__(self, dev_name, subdev_name):        
         self.dev_name = dev_name
+        self.subdev_name = subdev_name
         self.dev_handle = self.open_device()
-        
-        cap_type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
-        cap_memory = v4l2.V4L2_MEMORY_MMAP
-        cap_num_planes = 2
+        self.subdev_handle = self.open_subdevice()
 
-        fmt.type = cap_type
-        fmt.fmt.pix_mp.pixelformat = v4l2.V4L2_PIX_FMT_NV12M;
-        fmt.fmt.pix_mp.num_planes = cap_num_planes;
-        fmt.fmt.pix_mp.width = 1280;
-        fmt.fmt.pix_mp.height = 720;
-
-        if self.xioctl(v4l2.VIDIOC_S_FMT, &fmt) != 0:
-            raise Exception("VIDIOC_S_FMT error.")
-        print(fmt.type)
-        print(fmt.fmt.pix_mp.pixelformat)
-
-# 	int ret = 0;
-# 	struct v4l2_requestbuffers req;
-# 	struct v4l2_format fmt = {0};
-
-# 	/*
-# 	 * MPLANE API is used by the application.
-# 	 * NV12 is used by the render routine which has two planes.
-# 	 * First plane is luma, second plane is chroma at 1/4 resolution.
-# 	 */
-# 	cap->type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-# 	cap->memory = V4L2_MEMORY_MMAP;
-# 	cap->num_planes = 2;
-
-# 	/*
-# 	 * Framezises should be queried and a valid format chosen.
-# 	 * This application is forcing 1080p for the sensor and display.
-# 	 */
-# 	fmt.type = cap->type;
-# 	fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12M;
-# 	fmt.fmt.pix_mp.num_planes = cap->num_planes;
-# 	fmt.fmt.pix_mp.width = 1920;
-# 	fmt.fmt.pix_mp.width = 1080;
-# 	ret = ioctl(cap->v4l2_fd, VIDIOC_S_FMT, &fmt);
-# 	if (ret < 0)
-# 	{
-# 		LOGS_ERR("Unable to set format %d", ret);
-# 		exit(-errno);
-# 	}
-
-# 	/* Request the number of buffers indicated by the user options */
-# 	memset(&req, 0, sizeof(req));
-# 	req.count = opt->buffer_count;
-# 	req.type = cap->type;
-# 	req.memory = cap->memory;
-# 	ret = ioctl(cap->v4l2_fd, VIDIOC_REQBUFS, &req);
-# 	if (ret < 0)
-# 	{
-# 		LOGS_ERR("Unable to request user buffers %d", ret);
-# 		exit(-errno);
-# 	}
-
-# 	/* Save the number of buffers actually allocated and set the DMA desciptors to invalid descriptors. */
-# 	cap->num_buf = req.count;
-# 	for (int i = 0; i < cap->num_buf; i++)
-# 		for (int p = 0; p < cap->num_planes; p++)
-# 			cap->buffers[i].dma_buf_fd[p] = -1;
-
-# 	/* Memory map the buffers into user space */
-# 	ret = map_buffers(cap, opt->dma_export);
-# 	if (ret) goto cleanup;
-
-# 	/* initialize capture by queueing aloctaed buffers before streaming is enabled */
-# 	ret = queue_buffers(cap->v4l2_fd, cap->num_buf, cap->buffers);
-# 	if (ret) goto cleanup;
-
-# 	/* Start the video stream, this will setup initial settings on the subdevice. */
-# 	ret = start_stream(cap->v4l2_fd);
-
-# 	return ret;
-# cleanup:
-# 	capture_shutdown(cap);
-# 	return ret;
-
-
-
-
+        self._frame_rate = 1,30 # FIXME: A principio nao da pra mudar o fps e parece que o valor da cam eh 30
 
         #self.verify_device()
         self.get_format()
@@ -930,31 +852,35 @@ cdef class CaptureDragon:
     def restart(self):
         self.close()
         self.dev_handle = self.open_device()
-        self.verify_device()
+        self.dev_handle = self.open_subdevice()
+        #self.verify_device()
         self.transport_format = b'MJPG' #this will set prev parms
         logger.warning("restarted capture device")
 
-
+    #Ready
     def close(self):
         try:
             self.stop()
             self.deinit_buffers()
+            self.close_subdevice()
             self.close_device()
         except:
             logger.warning("Could not shut down Capture properly.")
 
+    #Ready
     def __dealloc__(self):
         turbojpeg.tjDestroy(self.tj_context)
 
         if self.dev_handle != -1:
             self.close()
 
+    #Ready
     def get_info(self):
         cdef v4l2.v4l2_capability caps
-        if self.xioctl(v4l2.VIDIOC_QUERYCAP,&caps) !=0:
+        if self.xioctl(v4l2.VIDIOC_QUERYCAP, &caps) != 0:
             raise Exception("VIDIOC_QUERYCAP error. Could not get devices info.")
 
-        return  {'dev_path':self.dev_name,'driver':caps.driver,'dev_name':caps.card,'bus_info':caps.bus_info}
+        return  {'dev_path': self.dev_name, 'subdev_path': self.subdev_name, 'driver': caps.driver, 'dev_name': caps.card, 'bus_info': caps.bus_info}
 
     def get_frame_robust(self, int attemps = 6):
         for a in range(attemps)[::-1]:
@@ -1051,56 +977,102 @@ cdef class CaptureDragon:
             else:
                 return
 
-
+    #Ok
     cdef xioctl(self, int request, void *arg):
         cdef int r
         while True:
             r = ioctl(self.dev_handle, request, arg)
-            if -1 != r or EINTR != errno:
+            if r != -1 or errno != EINTR:
                 break
         return r
 
+    #Ok
+    cdef subxioctl(self, int request, void *arg):
+        cdef int r
+        while True:
+            r = ioctl(self.subdev_handle, request, arg)
+            if r != -1 or errno != EINTR:
+                break
+        return r
+
+    #Ok
     cdef open_device(self):
         cdef stat.struct_stat st
         cdef int dev_handle = -1
-        if -1 == stat.stat(<char *>self.dev_name, &st):
-            raise Exception("Cannot find '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno) ))
+        if stat.stat(<char *>self.dev_name, &st) == -1:
+            raise Exception("Cannot find '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno)))
         if not stat.S_ISCHR(st.st_mode):
             raise Exception("%s is no device\n"%self.dev_name)
 
         dev_handle = fcntl.open(<char *>self.dev_name, fcntl.O_RDWR | fcntl.O_NONBLOCK, 0)
-        if -1 == dev_handle:
-            raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno) ))
+        if dev_handle != -1:
+            raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno)))
         return dev_handle
 
-
+    #Ok
     cdef close_device(self):
         if not self.dev_handle == -1:
             if unistd.close(self.dev_handle) == -1:
-                raise Exception("Could not close device. Handle: '%s'. Error: %d, %s\n"%(self.dev_handle, errno, strerror(errno) ))
+                raise Exception("Could not close device. Handle: '%s'. Error: %d, %s\n"%(self.dev_handle, errno, strerror(errno)))
             self.dev_handle = -1
+
+    #Ready
+    cdef open_subdevice(self):
+        cdef stat.struct_stat st
+        cdef int subdev_handle = -1
+        if stat.stat(<char *>self.subdev_name, &st) == -1:
+            raise Exception("Cannot find '%s'. Error: %d, %s\n"%(self.subdev_name, errno, strerror(errno)))
+        if not stat.S_ISCHR(st.st_mode):
+            raise Exception("%s is no sub-device\n"%self.subdev_name)
+
+        subdev_handle = fcntl.open(<char *>self.subdev_name, fcntl.O_RDWR | fcntl.O_NONBLOCK, 0)
+        if subdev_handle != -1:
+            raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.subdev_name, errno, strerror(errno)))
+        return subdev_handle
+
+    #Ready
+    cdef close_subdevice(self):
+        if not self.subdev_handle == -1:
+            if unistd.close(self.subdev_handle) == -1:
+                raise Exception("Could not close sub-device. Handle: '%s'. Error: %d, %s\n"%(self.subdev_handle, errno, strerror(errno)))
+            self.subdev_handle = -1
 
 
     cdef verify_device(self):
         cdef v4l2.v4l2_capability cap
-        if self.xioctl(v4l2.VIDIOC_QUERYCAP, &cap) ==-1:
+        cdef v4l2.v4l2_capability subcap
+
+        if self.xioctl(v4l2.VIDIOC_QUERYCAP, &cap) == -1:
             if EINVAL == errno:
                 raise Exception("%s is no V4L2 device\n"%self.dev_name)
             else:
-                raise Exception("Error during VIDIOC_QUERYCAP: %d, %s"%(errno, strerror(errno) ))
+                raise Exception("Error during VIDIOC_QUERYCAP: %d, %s"%(errno, strerror(errno)))
         
-        if not (cap.capabilities & v4l2.V4L2_CAP_VIDEO_CAPTURE):
-            raise Exception("%s is no video capture device"%self.dev_name)
+        print('Cap:')
+        print(cap)
 
-        if not (cap.capabilities & v4l2.V4L2_CAP_STREAMING):
-            raise Exception("%s does not support streaming i/o"%self.dev_name)
+        if self.subxioctl(v4l2.VIDIOC_QUERYCAP, &subcap) == -1:
+            if EINVAL == errno:
+                raise Exception("%s is no V4L2 device\n"%self.subdev_name)
+            else:
+                raise Exception("Error during VIDIOC_QUERYCAP: %d, %s"%(errno, strerror(errno)))
+        
+        print('SubCap:')
+        print(subcap)
 
+        #if not (cap.capabilities & v4l2.V4L2_CAP_VIDEO_CAPTURE):
+        #    raise Exception("%s is no video capture device"%self.dev_name)
 
+        #if not (cap.capabilities & v4l2.V4L2_CAP_STREAMING):
+        #    raise Exception("%s does not support streaming i/o"%self.dev_name)
+
+    #Ready
     cdef stop(self):
         cdef v4l2.v4l2_buf_type buf_type
         if self._camera_streaming:
-            buf_type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-            if self.xioctl(v4l2.VIDIOC_STREAMOFF,&buf_type) == -1:
+            buf_type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+            if self.xioctl(v4l2.VIDIOC_STREAMOFF, &buf_type) == -1:
+                self.close_subdevice()
                 self.close_device()
                 raise Exception("Could not deinit buffers.")
 
@@ -1114,7 +1086,7 @@ cdef class CaptureDragon:
         cdef v4l2.v4l2_buf_type buf_type
         if not self._camera_streaming:
             for i in range(len(self.buffers)):
-                buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+                buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
                 buf.memory = v4l2.V4L2_MEMORY_MMAP
                 buf.index = i
                 if self.xioctl(v4l2.VIDIOC_QBUF, &buf) == -1:
@@ -1197,13 +1169,7 @@ cdef class CaptureDragon:
 
     #Ready
     cdef set_streamparm(self):
-        cdef v4l2.v4l2_streamparm parm
-        parm.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
-        parm.parm.capture.timeperframe.numerator = self.frame_rate[0]
-        parm.parm.capture.timeperframe.denominator = self.frame_rate[1]
-        if self.xioctl(v4l2.VIDIOC_S_PARM, &parm) == -1:
-            self.close()
-            raise Exception("Could not set v4l2 parameters")
+        print('Driver doesn\'t support VIDIOC_S_PARM')
        
     #Ready
     cdef get_format(self):
@@ -1218,13 +1184,7 @@ cdef class CaptureDragon:
 
     #Ready
     cdef get_streamparm(self):
-        cdef v4l2.v4l2_streamparm parm
-        parm.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
-        if self.xioctl(v4l2.VIDIOC_G_PARM, &parm) == -1:
-            self.close()
-            raise Exception("Could not get v4l2 parameters")
-        else:
-            self._frame_rate = parm.parm.capture.timeperframe.numerator,parm.parm.capture.timeperframe.denominator
+        print('Driver doesn\'t support VIDIOC_G_PARM')
 
     #Ready
     property transport_formats:
@@ -1241,61 +1201,27 @@ cdef class CaptureDragon:
                 self._transport_formats = formats
             return self._transport_formats
 
-        def __set__(self,val):
+        def __set__(self, val):
             raise Exception("Read Only")
 
     #Ready
     property frame_sizes:
         def __get__(self):
-            cdef  v4l2.v4l2_frmsizeenum frmsize
-            if self._frame_sizes is None:
-                frmsize.pixel_format = fourcc_u32(self.transport_format.encode('utf-8'))
-                frmsize.index = 0
-                sizes = []
-                while self.xioctl(v4l2.VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0:
-                    if frmsize.type == v4l2.V4L2_FRMSIZE_TYPE_DISCRETE:
-                        sizes.append((frmsize.discrete.width, frmsize.discrete.height))
-                    elif frmsize.type == v4l2.V4L2_FRMSIZE_TYPE_STEPWISE:
-                        sizes.append((frmsize.stepwise.max_width, frmsize.stepwise.max_height))
-                    frmsize.index += 1
-                logger.debug("Reading frame sizes@'%s': %s"%(self.transport_format, sizes) )
-                self._frame_sizes = sizes 
-
+            self._frame_sizes = []
+            print('Driver doesn\'t support VIDIOC_ENUM_FRAMESIZES')
             return self._frame_sizes
 
-        def __set__(self,val):
+        def __set__(self, val):
             raise Exception("Read Only")
 
     #Ready
     property frame_rates:
         def __get__(self):
-            cdef v4l2.v4l2_frmivalenum interval
-
-            if self._frame_rates is None:
-                interval.pixel_format = fourcc_u32(self.transport_format.encode('utf-8'))
-                interval.width,interval.height = self.frame_size
-                interval.index = 0
-                self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS, &interval)
-                rates = []
-                if interval.type == v4l2.V4L2_FRMIVAL_TYPE_DISCRETE:
-                    while self.xioctl(v4l2.VIDIOC_ENUM_FRAMEINTERVALS, &interval) >= 0:
-                        rates.append((interval.discrete.numerator,interval.discrete.denominator))
-                        interval.index += 1
-                #non-discreete rates are very seldom, the second and third case should never happen
-                elif interval.type == v4l2.V4L2_FRMIVAL_TYPE_STEPWISE or interval.type == v4l2.V4L2_FRMIVAL_TYPE_CONTINUOUS:
-                    minval = float(interval.stepwise.min.numerator)/interval.stepwise.min.denominator
-                    maxval = float(interval.stepwise.max.numerator)/interval.stepwise.max.denominator
-                    if interval.type == v4l2.V4L2_FRMIVAL_TYPE_CONTINUOUS:
-                        stepval = 1
-                    else:
-                        stepval = float(interval.stepwise.step.numerator)/interval.stepwise.step.denominator
-                    rates = range(minval, maxval, stepval)
-                logger.debug("Reading frame rates@'%s'@%s: %s"%(self.transport_format, self.frame_size, rates))
-                self._frame_rates = rates
-
+            self._frame_rates = []
+            print('Driver doesn\'t support VIDIOC_ENUM_FRAMEINTERVALS')
             return self._frame_rates
 
-        def __set__(self,val):
+        def __set__(self, val):
             raise Exception("Read Only")
 
     #Ready
@@ -1303,7 +1229,7 @@ cdef class CaptureDragon:
         def __get__(self):
             return fourcc_string(self._transport_format)
 
-        def __set__(self,val):
+        def __set__(self, val):
             self._transport_format = fourcc_u32(val)
             self.stop()
             self.deinit_buffers()
@@ -1318,7 +1244,7 @@ cdef class CaptureDragon:
     property frame_size:
         def __get__(self):
             return self._frame_size
-        def __set__(self,val):
+        def __set__(self, val):
             self._frame_size = val
             self._frame_rates = None
             self.stop()
@@ -1332,12 +1258,8 @@ cdef class CaptureDragon:
     property frame_rate:
         def __get__(self):
             return self._frame_rate
-        def __set__(self,val):
-            self._frame_rate = val
-            self.stop()
-            self.deinit_buffers()
-            self.set_streamparm()
-            self.get_streamparm()
+        def __set__(self, val):
+            raise Exception("Read Only")
 
     #Ready
     def enum_controls(self):
@@ -1348,7 +1270,7 @@ cdef class CaptureDragon:
                         v4l2.V4L2_CTRL_TYPE_BOOLEAN:'bool',
                         v4l2.V4L2_CTRL_TYPE_MENU:'menu'}
 
-        while (self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0):
+        while (self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0): # AQUI!
             if v4l2.V4L2_CTRL_ID2CLASS(queryctrl.id) != v4l2.V4L2_CTRL_CLASS_CAMERA:
                 #we ignore this conditon
                 pass
@@ -1378,32 +1300,33 @@ cdef class CaptureDragon:
             # raise Exception("VIDIOC_QUERYCTRL")
         return controls
 
-    cdef enumerate_menu(self,v4l2.v4l2_queryctrl queryctrl):
+    cdef enumerate_menu(self, v4l2.v4l2_queryctrl queryctrl):
         cdef v4l2.v4l2_querymenu querymenu
         querymenu.id = queryctrl.id
         querymenu.index = queryctrl.minimum
         menu = {}
         while querymenu.index <= queryctrl.maximum:
-            if 0 == self.xioctl(v4l2.VIDIOC_QUERYMENU, &querymenu):
+            if self.xioctl(v4l2.VIDIOC_QUERYMENU, &querymenu) == 0:
                 menu[querymenu.name] = querymenu.index
-            querymenu.index +=1
+            querymenu.index += 1
         return menu
 
-
-    cpdef set_control(self, int control_id,value):
+    #Ready
+    cpdef set_control(self, int control_id, value):
         cdef v4l2.v4l2_control control
         control.id = control_id
         control.value = value
-        if self.xioctl(v4l2.VIDIOC_S_CTRL, &control) ==-1:
+        if self.xioctl(v4l2.VIDIOC_S_CTRL, &control) == -1: # AQUI!
             if errno == ERANGE:
                 logger.debug("Control out of range")
             else:
                 logger.error("Could not set control")
 
+    #Ready
     cpdef get_control(self, int control_id):
         cdef v4l2.v4l2_control control
         control.id = control_id
-        if self.xioctl(v4l2.VIDIOC_G_CTRL, &control) ==-1:
+        if self.xioctl(v4l2.VIDIOC_G_CTRL, &control) == -1: # AQUI!
             if errno == EINVAL:
                 logger.debug("Control is not supported")
             else:
@@ -1452,7 +1375,7 @@ cdef class Cap_Info:
 
     def get_info(self):
         cdef v4l2.v4l2_capability caps
-        if self.xioctl(v4l2.VIDIOC_QUERYCAP, &caps) !=0:
+        if self.xioctl(v4l2.VIDIOC_QUERYCAP, &caps) != 0:
             raise Exception("VIDIOC_QUERYCAP error. Could not get devices info.")
 
         return {'dev_path':self.dev_name,'driver':caps.driver,'dev_name':caps.card,'bus_info':caps.bus_info}

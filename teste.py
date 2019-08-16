@@ -3,13 +3,14 @@ import cv2
 import numpy as np
 
 # Dragon + D3 Mezzanine
-#file = '/dev/video3'
-#cap = v4l2.CaptureDragon(file.encode('utf-8'))
+file = '/dev/video3'
+cap = v4l2.CaptureDragon(file.encode('utf-8'))
 
 # Webcam
-file = '/dev/video0'
-cap = v4l2.Capture(file.encode('utf-8'))
+#file = '/dev/video0'
+#cap = v4l2.Capture(file.encode('utf-8'))
 
+# All
 print('Capture devices:')
 print(v4l2.list_devices())
 
@@ -25,10 +26,11 @@ print(cap.frame_sizes)
 
 print('Frame size: %s x %s'%(cap.frame_size[0], cap.frame_size[1]))
 
-print('Frame rates @ %s - %s x %s:'%(cap.transport_format, cap.frame_size[0], cap.frame_size[1]))
-print(cap.frame_rates)
+# Webcam
+#print('Frame rates @ %s - %s x %s:'%(cap.transport_format, cap.frame_size[0], cap.frame_size[1]))
+#print(cap.frame_rates)
 
-print('Frame rate: %s/%s'%(cap.frame_rate[0], cap.frame_rate[1]))
+#print('Frame rate: %s/%s'%(cap.frame_rate[0], cap.frame_rate[1]))
 
 # cap.frame_size = (1280, 720)
 # cap.frame_rate = (1,30)
