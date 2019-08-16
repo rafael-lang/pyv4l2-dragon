@@ -829,7 +829,7 @@ cdef class CaptureDragon:
 
         self._frame_rate = 1,30 # FIXME: A principio nao da pra mudar o fps e parece que o valor da cam eh 30
 
-        #self.verify_device()
+        self.verify_device()
         self.get_format()
         self.get_streamparm()
 
@@ -853,7 +853,7 @@ cdef class CaptureDragon:
         self.close()
         self.dev_handle = self.open_device()
         self.dev_handle = self.open_subdevice()
-        #self.verify_device()
+        self.verify_device()
         self.transport_format = b'MJPG' #this will set prev parms
         logger.warning("restarted capture device")
 
