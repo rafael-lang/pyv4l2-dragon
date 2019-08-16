@@ -732,8 +732,7 @@ cdef class Capture:
                         v4l2.V4L2_CTRL_TYPE_INTEGER64:'int64',
                         v4l2.V4L2_CTRL_TYPE_CTRL_CLASS:'ctrlclass',
                         v4l2.V4L2_CTRL_TYPE_STRING:'string',
-                        v4l2.V4L2_CTRL_TYPE_BITMASK:'bitmask',
-                        v4l2.V4L2_CTRL_TYPE_INTEGER_MENU:'intmenu'}
+                        v4l2.V4L2_CTRL_TYPE_BITMASK:'bitmask'}
 
         while (0 == self.xioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl)):
 
@@ -1266,8 +1265,7 @@ cdef class CaptureDragon:
                         v4l2.V4L2_CTRL_TYPE_INTEGER64:'int64',
                         v4l2.V4L2_CTRL_TYPE_CTRL_CLASS:'ctrlclass',
                         v4l2.V4L2_CTRL_TYPE_STRING:'string',
-                        v4l2.V4L2_CTRL_TYPE_BITMASK:'bitmask',
-                        v4l2.V4L2_CTRL_TYPE_INTEGER_MENU:'intmenu'}
+                        v4l2.V4L2_CTRL_TYPE_BITMASK:'bitmask'}
 
         while (self.subxioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0):
             if v4l2.V4L2_CTRL_ID2CLASS(queryctrl.id) != v4l2.V4L2_CTRL_CLASS_CAMERA:
