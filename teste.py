@@ -4,7 +4,8 @@ import numpy as np
 
 # Dragon + D3 Mezzanine
 file = '/dev/video3'
-cap = v4l2.CaptureDragon(file.encode('utf-8'))
+subfile = '/dev/v4l-subdev10'
+cap = v4l2.CaptureDragon(file.encode('utf-8'), subfile.encode('utf-8'))
 
 # Webcam
 #file = '/dev/video0'
