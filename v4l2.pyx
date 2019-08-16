@@ -1005,7 +1005,7 @@ cdef class CaptureDragon:
             raise Exception("%s is no device\n"%self.dev_name)
 
         dev_handle = fcntl.open(<char *>self.dev_name, fcntl.O_RDWR | fcntl.O_NONBLOCK, 0)
-        if dev_handle != -1:
+        if dev_handle == -1:
             raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.dev_name, errno, strerror(errno)))
         return dev_handle
 
@@ -1026,7 +1026,7 @@ cdef class CaptureDragon:
             raise Exception("%s is no sub-device\n"%self.subdev_name)
 
         subdev_handle = fcntl.open(<char *>self.subdev_name, fcntl.O_RDWR | fcntl.O_NONBLOCK, 0)
-        if subdev_handle != -1:
+        if subdev_handle == -1:
             raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.subdev_name, errno, strerror(errno)))
         return subdev_handle
 
