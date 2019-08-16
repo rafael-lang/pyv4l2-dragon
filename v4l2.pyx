@@ -1040,7 +1040,6 @@ cdef class CaptureDragon:
 
     cdef verify_device(self):
         cdef v4l2.v4l2_capability cap
-        cdef v4l2.v4l2_capability subcap
 
         if self.xioctl(v4l2.VIDIOC_QUERYCAP, &cap) == -1:
             if EINVAL == errno:
@@ -1049,22 +1048,15 @@ cdef class CaptureDragon:
                 raise Exception("Error during VIDIOC_QUERYCAP: %d, %s"%(errno, strerror(errno)))
         
         print('Cap:')
-        print(cap)
+        print(cap.capabilities & v4l2.V4L2_CAP_READWRITE)
+        print(cap.capabilities & v4l2.V4L2_CAP_ASYNCIO)
+        print(cap.capabilities & v4l2.V4L2_CAP_STREAMING)
 
-        if self.subxioctl(v4l2.VIDIOC_QUERYCAP, &subcap) == -1:
-            if EINVAL == errno:
-                raise Exception("%s is no V4L2 device\n"%self.subdev_name)
-            else:
-                raise Exception("Error during VIDIOC_QUERYCAP: %d, %s"%(errno, strerror(errno)))
-        
-        print('SubCap:')
-        print(subcap)
+        if not (cap.capabilities & v4l2.V4L2_CAP_VIDEO_CAPTURE_MPLANE):
+            raise Exception("%s is no video capture device"%self.dev_name)
 
-        #if not (cap.capabilities & v4l2.V4L2_CAP_VIDEO_CAPTURE):
-        #    raise Exception("%s is no video capture device"%self.dev_name)
-
-        #if not (cap.capabilities & v4l2.V4L2_CAP_STREAMING):
-        #    raise Exception("%s does not support streaming i/o"%self.dev_name)
+        if not (cap.capabilities & v4l2.V4L2_CAP_STREAMING):
+            raise Exception("%s does not support streaming i/o"%self.dev_name)
 
     #Ready
     cdef stop(self):
