@@ -794,7 +794,7 @@ cdef class Capture:
             if errno == EINVAL:
                 logger.debug("Control is not supported")
             else:
-                logger.error("Could not set control")
+                logger.error("Could not get control")
         return control.value
 
 
@@ -1269,9 +1269,11 @@ cdef class CaptureDragon:
 
         while (self.subxioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0):
             if v4l2.V4L2_CTRL_ID2CLASS(queryctrl.id) != v4l2.V4L2_CTRL_CLASS_CAMERA:
+                print('Not Camera:')
+                print(queryctrl)
                 #we ignore this conditon
                 pass
-            control = {}  
+            control = {}
             control['name'] = queryctrl.name
             control['type'] = control_type[queryctrl.type]
             control['id'] = queryctrl.id
@@ -1303,7 +1305,7 @@ cdef class CaptureDragon:
         querymenu.index = queryctrl.minimum
         menu = {}
         while querymenu.index <= queryctrl.maximum:
-            if self.xioctl(v4l2.VIDIOC_QUERYMENU, &querymenu) == 0: # AQUI!
+            if self.subxioctl(v4l2.VIDIOC_QUERYMENU, &querymenu) == 0:
                 menu[querymenu.name] = querymenu.index
             querymenu.index += 1
         return menu
@@ -1327,7 +1329,7 @@ cdef class CaptureDragon:
             if errno == EINVAL:
                 logger.debug("Control is not supported")
             else:
-                logger.error("Could not set control")
+                logger.error("Could not get control %s: (%s) %s"%(control_id, errno, strerror(errno)))
         return control.value
 
 ###Utiliy functions
