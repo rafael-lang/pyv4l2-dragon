@@ -36,8 +36,10 @@ print('Frame size: %s x %s'%(cap.frame_size[0], cap.frame_size[1]))
 #print('Controls:')
 #print(cap.enum_controls())
 
-cap.get_frame_part()
-print('out')
+frame = cap.get_frame_part()
+y = frame.lang
+cv2.imshow("lang", y)
+cv2.waitKey(0)
 
 # cap.frame_size = (1280, 720)
 # cap.frame_rate = (1,30)

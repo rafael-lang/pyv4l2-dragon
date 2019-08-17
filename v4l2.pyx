@@ -269,6 +269,190 @@ cdef class Frame:
 
 
 
+cdef class FrameDragon:
+    '''
+    The Frame Object holds image data and image metadata.
+
+    The Frame object is returned from Capture.get_frame()
+
+    It will hold the data in the transport format the Capture is configured to grab.
+    Usually this is mjpeg or yuyv
+
+    Other formats can be requested and will be converted/decoded on the fly.
+    Frame will use caching to avoid redunant work.
+    Usually RGB8,YUYV or GRAY are requested formats.
+
+    WARNING:
+    When capture.get_frame() is called again previos instances of Frame will point to invalid memory.
+    Specifically the image format in the capture transport format.
+    Previously converted formats are still valid.
+    '''
+
+    cdef buffer_handle_dragon _nv_buffer
+
+    cdef turbojpeg.tjhandle tj_context
+    cdef buffer_handle _jpeg_buffer
+    cdef unsigned char[:] _bgr_buffer, _gray_buffer,_yuv_buffer #we use numpy for memory management.
+    cdef bint _yuv_converted, _bgr_converted
+    cdef public double timestamp
+    cdef public int width,height, yuv_subsampling
+
+    def __cinit__(self):
+        # pass        
+        # self._jpeg_buffer.start = NULL doing this leads to the very strange behaivour of numpy slicing to break!
+        self._yuv_converted = False
+        self._bgr_converted = False
+    def __init__(self):
+        pass
+
+    property nv12m_buffer:
+        def __set__(self, buffer_handle_dragon buffer):
+            self._nv_buffer = buffer
+        
+        def __get__(self):
+            if (self._nv_buffer.start[0] == NULL or self._nv_buffer.start[1] == NULL):
+                raise Exception("NV12M buffer not used and not allocated.")
+            return self._nv_buffer
+
+    property lang:
+        def __set__(self, val):
+            raise Exception('Read only')
+
+        def __get__(self):
+            cdef np.ndarray[np.uint8_t, ndim=2] Y
+            y_plane_len = self.width*self.height
+            Y = np.asarray(self._nv_buffer[:y_plane_len]).reshape(self.height,self.width)
+            return Y
+
+    property yuv:
+        def __set__(self,val):
+            raise Exception('read only')
+        def __get__(self):
+            '''
+            planar YUV420 returned in 3 numpy arrays:
+            420 subsampling:
+                Y(height,width) U(height/2,width/2), V(height/2,width/2)
+            '''
+            if self._yuv_converted is False:
+                if self._jpeg_buffer.start != NULL:
+                    self.jpeg2yuv()
+                else:
+                    raise Exception("No source image data found to convert from.")
+
+            cdef np.ndarray[np.uint8_t, ndim=2] Y,U,V
+            y_plane_len = self.width*self.height
+            Y = np.asarray(self._yuv_buffer[:y_plane_len]).reshape(self.height,self.width)
+
+            if self.yuv_subsampling == turbojpeg.TJSAMP_422:
+                uv_plane_len = int(y_plane_len/2)
+                offset = y_plane_len
+                U = np.asarray(self._yuv_buffer[offset:offset+uv_plane_len]).reshape(self.height,int(self.width/2))
+                offset += uv_plane_len
+                V = np.asarray(self._yuv_buffer[offset:offset+uv_plane_len]).reshape(self.height,int(self.width/2))
+                #hack solution to go from YUV422 to YUV420
+                U = U[::2,:]
+                V = V[::2,:]
+            elif self.yuv_subsampling == turbojpeg.TJSAMP_420:
+                uv_plane_len = int(y_plane_len/4)
+                offset = y_plane_len
+                U = np.asarray(self._yuv_buffer[offset:offset+uv_plane_len]).reshape(int(self.height/2),int(self.width/2))
+                offset += uv_plane_len
+                V = np.asarray(self._yuv_buffer[offset:offset+uv_plane_len]).reshape(int(self.height/2),int(self.width/2))
+            elif self.yuv_subsampling == turbojpeg.TJSAMP_444:
+                uv_plane_len = y_plane_len
+                offset = y_plane_len
+                U = np.asarray(self._yuv_buffer[offset:offset+uv_plane_len]).reshape(self.height,self.width)
+                offset += uv_plane_len
+                V = np.asarray(self._yuv_buffer[offset:offset+uv_plane_len]).reshape(self.height,self.width)
+                #hack solution to go from YUV444 to YUV420
+                U = U[::2,::2]
+                V = V[::2,::2]
+            return Y,U,V
+
+    property gray:      
+        def __set__(self,val):
+            raise Exception('read only')
+        def __get__(self):
+            # return gray aka luminace plane of YUV image.
+            if self._yuv_converted is False:
+                if self._jpeg_buffer.start != NULL:
+                    self.jpeg2yuv()
+                else:
+                    raise Exception("No source image data found to convert from.")
+            cdef np.ndarray[np.uint8_t, ndim=2] Y
+            Y = np.asarray(self._yuv_buffer[:self.width*self.height]).reshape(self.height,self.width)
+            return Y
+
+    property bgr:      
+        def __set__(self,val):
+            raise Exception('read only')
+        def __get__(self):
+            if self._bgr_converted is False:
+                #toggle conversion if needed
+                _ = self.yuv
+                self.yuv2bgr()
+
+            cdef np.ndarray[np.uint8_t, ndim=3] BGR
+            BGR = np.asarray(self._bgr_buffer).reshape(self.height,self.width,3)
+            return BGR
+
+    property img:      
+        def __set__(self,val):
+            raise Exception('read only')
+        def __get__(self):
+            return self.bgr
+
+
+
+    cdef yuv2bgr(self):
+        #2.75 ms at 1080p
+        cdef int channels = 3
+        cdef int result
+        self._bgr_buffer = np.empty(self.width*self.height*channels, dtype=np.uint8)
+        result = turbojpeg.tjDecodeYUV(self.tj_context, &self._yuv_buffer[0], 4, self.yuv_subsampling, 
+                                        &self._bgr_buffer[0], self.width, 0, self.height, turbojpeg.TJPF_BGR, 0)
+        if result == -1:
+            logger.error('Turbojpeg yuv2bgr error: %s'%turbojpeg.tjGetErrorStr() )
+        self._bgr_converted = True
+
+
+
+    cdef jpeg2yuv(self):
+        # 7.55 ms on 1080p
+        cdef int channels = 1
+        cdef int jpegSubsamp, j_width,j_height
+        cdef int result
+        cdef long unsigned int buf_size
+        result = turbojpeg.tjDecompressHeader2(self.tj_context,  <unsigned char *>self._jpeg_buffer.start, 
+                                        self._jpeg_buffer.length, 
+                                        &j_width, &j_height, &jpegSubsamp)
+
+        if result == -1:
+            logger.error('Turbojpeg could not read jpeg header: %s'%turbojpeg.tjGetErrorStr() )
+            # hacky creation of dummy data, this will break if capture does work with different subsampling:
+            j_width, j_height, jpegSubsamp = self.width, self.height, turbojpeg.TJSAMP_422
+
+        buf_size = turbojpeg.tjBufSizeYUV(j_width, j_height, jpegSubsamp)
+        self._yuv_buffer = np.empty(buf_size, dtype=np.uint8)
+        if result !=-1:
+            result =  turbojpeg.tjDecompressToYUV(self.tj_context, 
+                                             <unsigned char *>self._jpeg_buffer.start, 
+                                             self._jpeg_buffer.length,
+                                             &self._yuv_buffer[0],
+                                              0)
+        if result == -1:
+            logger.error('Turbojpeg jpeg2yuv error: %s'%turbojpeg.tjGetErrorStr() )
+        self.yuv_subsampling = jpegSubsamp
+        self._yuv_converted = True
+
+    def clear_caches(self):
+        self._bgr_converted = False
+        self._yuv_converted = False
+
+
+
+
+
 cdef class Capture:
     """
     Video Capture class.
@@ -827,6 +1011,7 @@ cdef class CaptureDragon:
     cdef bint _buffer_active
     cdef int _allocated_buf_n
     cdef v4l2.v4l2_buffer _active_buffer
+    cdef v4l2.v4l2_plane _active_planes[2]
     cdef list buffers
 
     cdef turbojpeg.tjhandle tj_context
@@ -861,7 +1046,7 @@ cdef class CaptureDragon:
         self.tj_context = turbojpeg.tjInitDecompress()
 
         #set some sane defaults:
-        self.transport_format = b'MJPG'
+        self.transport_format = b'NM12'
 
     #Ready
     def restart(self):
@@ -869,7 +1054,7 @@ cdef class CaptureDragon:
         self.dev_handle = self.open_device()
         self.dev_handle = self.open_subdevice()
         self.verify_device()
-        self.transport_format = b'MJPG' #this will set prev parms
+        self.transport_format = b'NM12' #this will set prev parms
         logger.warning("restarted capture device")
 
     #Ready
@@ -988,6 +1173,8 @@ cdef class CaptureDragon:
         #deque the buffer
         self._active_buffer.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
         self._active_buffer.memory = v4l2.V4L2_MEMORY_MMAP
+        self._active_buffer.length = 2
+        self._active_buffer.m.planes = self._active_planes
         if self.xioctl(v4l2.VIDIOC_DQBUF, &self._active_buffer) == -1:
             if errno == EAGAIN: # no buffer available yet.
                 raise Exception("Fixme")
@@ -999,10 +1186,44 @@ cdef class CaptureDragon:
                 raise Exception("VIDIOC_DQBUF")
 
         self._buffer_active = True
-        print('A')
+
         # this is taken from the demo but it seams overly causious
         assert(self._active_buffer.index < self._allocated_buf_n)
-        print('B')
+
+        print('>> Cap: active buffer: %s'%self._active_buffer.index)
+
+        #now we hold a valid frame
+        # print self._active_buffer.timestamp.tv_sec,',',self._active_buffer.timestamp.tv_usec,self._active_buffer.bytesused,self._active_buffer.index
+        cdef FrameDragon out_frame = FrameDragon()
+        out_frame.tj_context = self.tj_context
+        out_frame.timestamp = <double>self._active_buffer.timestamp.tv_sec + (<double>self._active_buffer.timestamp.tv_usec) / 10e5
+        out_frame.width,out_frame.height = self._frame_size
+        
+        cdef buffer_handle_dragon buf = buffer_handle_dragon()
+        for p in range(2):
+            buf.start[p] = (<buffer_handle_dragon>self.buffers[self._active_buffer.index]).start[p]
+
+        if self._transport_format == v4l2.V4L2_PIX_FMT_NV12M:
+            print('Habemus NV12M')
+            out_frame.nv12m_buffer(buf)
+            print('...mesmo')
+
+
+        elif self._transport_format == v4l2.V4L2_PIX_FMT_MJPEG:
+            raise Exception("Transport format MJPEG is not implemented")
+            ##check jpeg header
+            #header_ok = turbojpeg.tjDecompressHeader2(self.tj_context,  <unsigned char *>buf.start, buf.length, &j_width, &j_height, &jpegSubsamp)
+            #if header_ok >=0 and out_frame.width == j_width and out_frame.height == out_frame.height:
+            #    out_frame.jpeg_buffer  = buf
+            #else:
+            #    raise Exception("JPEG header corrupted.")
+
+        elif self._transport_format == v4l2.V4L2_PIX_FMT_YUYV:
+            raise Exception("Transport format YUYV is not implemented")
+            # out_frame._yuyv_buffer = buf
+        else:
+            raise Exception("Tranport format data '%s' is not implemented."%self.transport_format)
+        return out_frame
 
     #Ok
     cdef wait_for_buffer_avaible(self):
@@ -1012,7 +1233,7 @@ cdef class CaptureDragon:
         while True:
             select.FD_ZERO(&fds)
             select.FD_SET(self.dev_handle, &fds)
-            tv.tv_sec = 2
+            tv.tv_sec = 10
             tv.tv_usec = 0
 
             r = select.select(self.dev_handle + 1, &fds, NULL, NULL, &tv)
@@ -1159,8 +1380,8 @@ cdef class CaptureDragon:
             self.buffers = []
             self._allocated_buf_n = req.count
 
-            b = buffer_handle_dragon()
             for i in range(req.count):
+                b = buffer_handle_dragon()
                 buf.m.planes = b.plane
                 buf.length = 4
                 buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
@@ -1181,7 +1402,8 @@ cdef class CaptureDragon:
                                            mman.PROT_READ | mman.PROT_WRITE,
                                            mman.MAP_SHARED,
                                            self.dev_handle,
-                                           buf.m.planes[p].offset)
+                                           0)
+                                           #buf.m.planes[p].m.mem_offset) #Pq precisei comentar a union no cv4l2.pxd
 
                     if <int> b.start[p] == mman.MAP_FAILED:
                         raise Exception("MMAP Error (%s) %s"%(errno, strerror(errno)))
@@ -1196,7 +1418,7 @@ cdef class CaptureDragon:
 
                         b.dma_buf_fd[p] = dma_buf.fd
 
-                    self.buffers.append(b)
+                self.buffers.append(b)
 
             self._buffers_initialized = True
             logger.debug("Buffers initialized")
