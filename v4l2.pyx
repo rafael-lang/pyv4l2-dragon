@@ -329,8 +329,9 @@ cdef class FrameDragon:
                 yLength = self.width*self.height
                 uvLength = int(self.width*self.height/4)
                 y = np.ctypeslib.as_array(<np.uint8_t[:yLength]>self._nv_buffer.start[0], shape=(yLength,)).reshape((self.height, self.width))
-                u = np.ctypeslib.as_array(<np.uint8_t[:uvLength]>self._nv_buffer.start[1][0:2*uvLength:2], shape=(uvLength,)).reshape((int(self.height/2), int(self.width/2)))
-                v = np.ctypeslib.as_array(<np.uint8_t[:uvLength]>self._nv_buffer.start[1][1:2*uvLength:2], shape=(uvLength,)).reshape((int(self.height/2), int(self.width/2)))
+                uv = np.ctypeslib.as_array(<np.uint8_t[:2*uvLength]>self._nv_buffer.start[1], shape=(2*uvLength,))
+                u = uv[0:uvLength:2].reshape((int(self.height/2), int(self.width/2)))
+                v = uv[1:uvLength:2].reshape((int(self.height/2), int(self.width/2)))
                 return y, u, v
 
     property yuv:
