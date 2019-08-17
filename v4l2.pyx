@@ -9,6 +9,7 @@ cimport cv4l2 as v4l2
 cimport cturbojpeg as turbojpeg
 cimport numpy as np
 import numpy as np
+cimport test as teste
 
 from libc.stdlib cimport malloc, free
 
@@ -32,7 +33,7 @@ cdef class buffer_handle:
 cdef class buffer_handle_dragon:
     cdef void* start[2]
     cdef size_t length[2]
-    cdef v4l2.v4l2_plane plane[2]
+    cdef teste.bbb plane[2]
 
     def __repr__(self):
         return  "Buffer pointing to %s and %s. length: %s and %s"%(<int>self.start[0], <int>self.start[1], <int>self.length[0], <int>self.length[1])
@@ -1214,10 +1215,7 @@ cdef class CaptureDragon:
             buf.start[p] = (<buffer_handle_dragon>self.buffers[self._active_buffer.index]).start[p]
 
         if self._transport_format == v4l2.V4L2_PIX_FMT_NV12M:
-            print('Habemus NV12M')
             out_frame.nv12m_buffer = buf
-            print('...mesmo')
-
 
         elif self._transport_format == v4l2.V4L2_PIX_FMT_MJPEG:
             raise Exception("Transport format MJPEG is not implemented")
@@ -1392,7 +1390,7 @@ cdef class CaptureDragon:
 
             for i in range(req.count):
                 b = buffer_handle_dragon()
-                buf.m.planes = b.plane
+                buf.m.planes = <v4l2.v4l2_plane*> b.plane
                 buf.length = 4
                 buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
                 buf.memory = v4l2.V4L2_MEMORY_MMAP
@@ -1401,8 +1399,7 @@ cdef class CaptureDragon:
                 if self.xioctl(v4l2.VIDIOC_QUERYBUF, &buf) == -1:
                     raise Exception("VIDIOC_QUERYBUF")
 
-# 		print_v4l2_buffer(buf, cap->type);
-
+                print_v4l2_buffer(&buf, v4l2.V4L2_MEMORY_MMAP)
 
                 for p in range(2):
                     #if False: #dma-export
@@ -1413,8 +1410,8 @@ cdef class CaptureDragon:
                                            mman.PROT_READ | mman.PROT_WRITE,
                                            mman.MAP_SHARED,
                                            self.dev_handle,
-                                           0)
-                                           #buf.m.planes[p].m.mem_offset) #Pq precisei comentar a union no cv4l2.pxd
+                                           #0)
+                                           buf.m.planes[p].m.mem_offset) #Pq precisei comentar a union no cv4l2.pxd
 
                     if <int> b.start[p] == mman.MAP_FAILED:
                         raise Exception("MMAP Error (%s) %s"%(errno, strerror(errno)))
@@ -1722,3 +1719,18 @@ def fourcc_string(i):
 #Ready
 cpdef v4l2.__u32 fourcc_u32(char * fourcc):
     return v4l2.v4l2_fourcc(fourcc[0],fourcc[1],fourcc[2],fourcc[3])
+
+cdef print_v4l2_buffer(v4l2.v4l2_buffer* buf, v4l2.__u32 type):
+    print("Buffer #%d"%buf.index)
+
+    print("\ttype:   %d"%buf.type)
+    print("\tmemory: %d"%buf.memory)
+    if (buf.m.planes != NULL):
+        for p in range(buf.length):
+            print("\t - Plane#: %d"%p)
+            print("\t - used:   %d"%buf.m.planes[p].bytesused)
+            print("\t - length: %d"%buf.m.planes[p].length)
+            if (type == v4l2.V4L2_MEMORY_MMAP):
+                print("\t - offset: %d"%buf.m.planes[p].m.mem_offset)
+            elif (type == v4l2.V4L2_MEMORY_USERPTR):
+                print("\t - usrptr: %lu"%buf.m.planes[p].m.userptr)
