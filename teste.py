@@ -33,8 +33,11 @@ print('Frame size: %s x %s'%(cap.frame_size[0], cap.frame_size[1]))
 
 #print('Frame rate: %s/%s'%(cap.frame_rate[0], cap.frame_rate[1]))
 
-print('Controls:')
-print(cap.enum_controls())
+#print('Controls:')
+#print(cap.enum_controls())
+
+cap.get_frame_part()
+print('out')
 
 # cap.frame_size = (1280, 720)
 # cap.frame_rate = (1,30)

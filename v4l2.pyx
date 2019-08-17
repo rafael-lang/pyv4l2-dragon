@@ -10,6 +10,7 @@ cimport cturbojpeg as turbojpeg
 cimport numpy as np
 import numpy as np
 
+from libc.stdlib cimport malloc, free
 
 from os import listdir as oslistdir
 
@@ -26,7 +27,15 @@ cdef class buffer_handle:
     cdef size_t length
 
     def __repr__(self):
-        return  "Buffer pointing to %s. length: %s"%(<int>self.start,self.length)
+        return  "Buffer pointing to %s. length: %s"%(<int>self.start, self.length)
+
+cdef class buffer_handle_dragon:
+    cdef void* start[2]
+    cdef size_t length[2]
+    cdef v4l2.v4l2_plane plane[2]
+
+    def __repr__(self):
+        return  "Buffer pointing to %s and %s. length: %s and %s"%(<int>self.start[0], <int>self.start[1], self.length[0], self.length[1])
       
 
     
@@ -355,7 +364,7 @@ cdef class Capture:
             self.start()
 
         if self._buffer_active:
-            if self.xioctl(v4l2.VIDIOC_QBUF,&self._active_buffer) == -1:
+            if self.xioctl(v4l2.VIDIOC_QBUF, &self._active_buffer) == -1:
                 raise Exception("Could not queue buffer")
             else:
                 self._buffer_active = False
@@ -854,6 +863,7 @@ cdef class CaptureDragon:
         #set some sane defaults:
         self.transport_format = b'MJPG'
 
+    #Ready
     def restart(self):
         self.close()
         self.dev_handle = self.open_device()
@@ -879,14 +889,15 @@ cdef class CaptureDragon:
         if self.dev_handle != -1:
             self.close()
 
-    #Ready
+    #Ok
     def get_info(self):
         cdef v4l2.v4l2_capability caps
         if self.xioctl(v4l2.VIDIOC_QUERYCAP, &caps) != 0:
             raise Exception("VIDIOC_QUERYCAP error. Could not get devices info.")
 
         return  {'dev_path': self.dev_name, 'subdev_path': self.subdev_name, 'driver': caps.driver, 'dev_name': caps.card, 'bus_info': caps.bus_info}
-
+    
+    #Ok
     def get_frame_robust(self, int attemps = 6):
         for a in range(attemps)[::-1]:
             try:
@@ -898,6 +909,7 @@ cdef class CaptureDragon:
                 return frame
         raise Exception("Could not grab frame from %s"%self.dev_name)
 
+    #Not
     def get_frame(self):
         cdef int j_width,j_height,jpegSubsamp,header_ok
         if not self._camera_streaming:
@@ -905,7 +917,7 @@ cdef class CaptureDragon:
             self.start()
 
         if self._buffer_active:
-            if self.xioctl(v4l2.VIDIOC_QBUF,&self._active_buffer) == -1:
+            if self.xioctl(v4l2.VIDIOC_QBUF, &self._active_buffer) == -1:
                 raise Exception("Could not queue buffer")
             else:
                 self._buffer_active = False
@@ -914,7 +926,7 @@ cdef class CaptureDragon:
 
 
         #deque the buffer
-        self._active_buffer.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+        self._active_buffer.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
         self._active_buffer.memory = v4l2.V4L2_MEMORY_MMAP
         if self.xioctl(v4l2.VIDIOC_DQBUF, &self._active_buffer) == -1:
             if errno == EAGAIN: # no buffer available yet.
@@ -959,6 +971,40 @@ cdef class CaptureDragon:
         return out_frame
 
 
+    def get_frame_part(self):
+        cdef int j_width,j_height,jpegSubsamp,header_ok
+        if not self._camera_streaming:
+            self.init_buffers()
+            self.start()
+
+        if self._buffer_active:
+            if self.xioctl(v4l2.VIDIOC_QBUF, &self._active_buffer) == -1:
+                raise Exception("Could not queue buffer")
+            else:
+                self._buffer_active = False
+
+        self.wait_for_buffer_avaible()
+
+        #deque the buffer
+        self._active_buffer.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+        self._active_buffer.memory = v4l2.V4L2_MEMORY_MMAP
+        if self.xioctl(v4l2.VIDIOC_DQBUF, &self._active_buffer) == -1:
+            if errno == EAGAIN: # no buffer available yet.
+                raise Exception("Fixme")
+
+            elif errno == EIO:
+                # Can ignore EIO, see spec. 
+                pass
+            else:
+                raise Exception("VIDIOC_DQBUF")
+
+        self._buffer_active = True
+        print('A')
+        # this is taken from the demo but it seams overly causious
+        assert(self._active_buffer.index < self._allocated_buf_n)
+        print('B')
+
+    #Ok
     cdef wait_for_buffer_avaible(self):
         cdef select.fd_set fds
         cdef time.timeval tv
@@ -972,7 +1018,7 @@ cdef class CaptureDragon:
             r = select.select(self.dev_handle + 1, &fds, NULL, NULL, &tv)
 
             if r == 0:
-                raise Exception("select timeout")
+                raise Exception("Select timeout")
             elif r == -1:
                 if errno != EINTR:
                     raise Exception("Select Error")
@@ -1021,7 +1067,7 @@ cdef class CaptureDragon:
                 raise Exception("Could not close device. Handle: '%s'. Error: %d, %s\n"%(self.dev_handle, errno, strerror(errno)))
             self.dev_handle = -1
 
-    #Ready
+    #Ok
     cdef open_subdevice(self):
         cdef stat.struct_stat st
         cdef int subdev_handle = -1
@@ -1035,7 +1081,7 @@ cdef class CaptureDragon:
             raise Exception("Cannot open '%s'. Error: %d, %s\n"%(self.subdev_name, errno, strerror(errno)))
         return subdev_handle
 
-    #Ready
+    #Ok
     cdef close_subdevice(self):
         if not self.subdev_handle == -1:
             if unistd.close(self.subdev_handle) == -1:
@@ -1071,8 +1117,7 @@ cdef class CaptureDragon:
             self._camera_streaming = False
             logger.debug("Capure stopped.")
 
-
-
+    #Ready
     cdef start(self):
         cdef v4l2.v4l2_buffer buf
         cdef v4l2.v4l2_buf_type buf_type
@@ -1084,20 +1129,22 @@ cdef class CaptureDragon:
                 if self.xioctl(v4l2.VIDIOC_QBUF, &buf) == -1:
                     raise Exception('VIDIOC_QBUF')
         
-            buf_type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-            if self.xioctl(v4l2.VIDIOC_STREAMON, &buf_type) ==-1:
+            buf_type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+            if self.xioctl(v4l2.VIDIOC_STREAMON, &buf_type) == -1:
                 raise Exception("VIDIOC_STREAMON")
             self._camera_streaming = True
             logger.debug("Capure started.")
 
     
-
+    #Ready
     cdef init_buffers(self):
         cdef v4l2.v4l2_requestbuffers req
         cdef v4l2.v4l2_buffer buf
+        #cdef v4l2.v4l2_exportbuffer dma_buf
+
         if not self._buffers_initialized:
             req.count = 4
-            req.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+            req.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
             req.memory = v4l2.V4L2_MEMORY_MMAP
 
             if self.xioctl(v4l2.VIDIOC_REQBUFS, &req) == -1:
@@ -1112,23 +1159,44 @@ cdef class CaptureDragon:
             self.buffers = []
             self._allocated_buf_n = req.count
 
-            for buf_n in range(req.count):
-                buf.type        = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-                buf.memory      = v4l2.V4L2_MEMORY_MMAP
-                buf.index       = buf_n
+            b = buffer_handle_dragon()
+            for i in range(req.count):
+                buf.m.planes = b.plane
+                buf.length = 4
+                buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+                buf.memory = v4l2.V4L2_MEMORY_MMAP
+                buf.index = i
+
                 if self.xioctl(v4l2.VIDIOC_QUERYBUF, &buf) == -1:
                     raise Exception("VIDIOC_QUERYBUF")
 
-                b = buffer_handle() 
-                b.length = buf.length
-                b.start = mman.mmap(NULL,#start anywhere
-                                    buf.length,
-                                    mman.PROT_READ | mman.PROT_WRITE,#required
-                                    mman.MAP_SHARED,#recommended
-                                    self.dev_handle, buf.m.offset)
-                if <int>b.start == mman.MAP_FAILED:
-                    raise Exception("MMAP Error")
-                self.buffers.append(b)
+# 		print_v4l2_buffer(buf, cap->type);
+
+
+                for p in range(2):
+                    b.dma_buf_fd[p] = -1
+                    b.length[p] = buf.m.planes[p].length
+                    b.start[p] = mman.mmap(NULL,
+                                           buf.m.planes[p].length,
+                                           mman.PROT_READ | mman.PROT_WRITE,
+                                           mman.MAP_SHARED,
+                                           self.dev_handle,
+                                           buf.m.planes[p].offset)
+
+                    if <int> b.start[p] == mman.MAP_FAILED:
+                        raise Exception("MMAP Error (%s) %s"%(errno, strerror(errno)))
+
+                    if False: #dma-export
+                        dma_buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+                        dma_buf.index = i
+                        dma_buf.plane = p
+
+                        if self.xioctl(v4l2.VIDIOC_EXPBUF, &dma_buf) == -1:
+                            raise Exception("VIDIOC_EXPBUF")
+
+                        b.dma_buf_fd[p] = dma_buf.fd
+
+                    self.buffers.append(b)
 
             self._buffers_initialized = True
             logger.debug("Buffers initialized")
@@ -1246,14 +1314,14 @@ cdef class CaptureDragon:
             self.set_streamparm()
             self.get_streamparm()
 
-    #Ready
+    #Ok
     property frame_rate:
         def __get__(self):
             return self._frame_rate
         def __set__(self, val):
             raise Exception("Read Only")
 
-    #Ready
+    #Ok
     def enum_controls(self):
         cdef v4l2.v4l2_queryctrl queryctrl
         queryctrl.id = v4l2.V4L2_CTRL_CLASS_USER | v4l2.V4L2_CTRL_FLAG_NEXT_CTRL
@@ -1269,8 +1337,6 @@ cdef class CaptureDragon:
 
         while (self.subxioctl(v4l2.VIDIOC_QUERYCTRL, &queryctrl) == 0):
             if v4l2.V4L2_CTRL_ID2CLASS(queryctrl.id) != v4l2.V4L2_CTRL_CLASS_CAMERA:
-                print('Not Camera:')
-                print(queryctrl)
                 #we ignore this conditon
                 pass
             control = {}
@@ -1299,6 +1365,7 @@ cdef class CaptureDragon:
             # raise Exception("VIDIOC_QUERYCTRL")
         return controls
 
+    #Ok
     cdef enumerate_menu(self, v4l2.v4l2_queryctrl queryctrl):
         cdef v4l2.v4l2_querymenu querymenu
         querymenu.id = queryctrl.id
@@ -1334,7 +1401,7 @@ cdef class CaptureDragon:
 
 ###Utiliy functions
 
-#Ready
+#Ok
 def list_devices():
     file_names = [x for x in oslistdir("/dev") if x.startswith("video")]
     file_names.sort()
