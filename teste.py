@@ -44,11 +44,11 @@ print('Frame size: %s x %s'%(cap.frame_size[0], cap.frame_size[1]))
 # print(cap.get_control(controls[0]['id']))
 # print('Will capture at:',cap.transport_format,cap.frame_size,cap.frame_rate)
 for x in range(2000):
- 	try:
- 		frame = cap.get_frame_part()
- 	except IOError: 
- 		print("could not grab frame")
- 		break
+    try:
+        frame = cap.get_frame_part()
+    except IOError: 
+        print("could not grab frame")
+        break
 
 # 	# print frame.width,frame.height
 # 	# print frame.d
@@ -64,9 +64,9 @@ for x in range(2000):
 
     y,u,v = frame.yuvlang
     cv2.imshow("y",y)
- 	cv2.imshow("u",u)
- 	cv2.imshow("v",v)
- 	cv2.waitKey(1)
+    cv2.imshow("u",u)
+    cv2.imshow("v",v)
+    cv2.waitKey(1)
 
 # 	# print img
 
