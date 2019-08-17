@@ -36,11 +36,6 @@ print('Frame size: %s x %s'%(cap.frame_size[0], cap.frame_size[1]))
 #print('Controls:')
 #print(cap.enum_controls())
 
-frame = cap.get_frame_part()
-y = frame.lang
-cv2.imshow("lang", y)
-cv2.waitKey(0)
-
 # cap.frame_size = (1280, 720)
 # cap.frame_rate = (1,30)
 # controls = cap.enum_controls()
@@ -48,12 +43,13 @@ cv2.waitKey(0)
 # cap.set_control(controls[0]['id'],controls[0]['default'])
 # print(cap.get_control(controls[0]['id']))
 # print('Will capture at:',cap.transport_format,cap.frame_size,cap.frame_rate)
-# for x in range(2000):
-# 	try:
-# 		frame = cap.get_frame_robust()
-# 	except IOError: 
-# 		print("could not grab frame")
-# 		break
+for x in range(2000):
+ 	try:
+ 		frame = cap.get_frame_part()
+ 	except IOError: 
+ 		print("could not grab frame")
+ 		break
+
 # 	# print frame.width,frame.height
 # 	# print frame.d
 # 	y= frame.bgr
@@ -65,11 +61,13 @@ cv2.waitKey(0)
 # 	# y = np.ones((1080,1920b,1))
 # 	# print y[].shape
 # 	# print u[]s.shape
-# 	cv2.imshow("img",y)
-# 	#cv2.imshow("u",u)
-# 	#cv2.imshow("v",v)
 
-# 	cv2.waitKey(1)
+    y,u,v = frame.yuvlang
+    cv2.imshow("y",y)
+ 	cv2.imshow("u",u)
+ 	cv2.imshow("v",v)
+ 	cv2.waitKey(1)
+
 # 	# print img
 
 cap.close()
