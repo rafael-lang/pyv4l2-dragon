@@ -377,14 +377,15 @@ cdef extern from  "linux/videodev2.h":
         v4l2_memory memory
         __u32 reserved[2]
 
-    cdef union __v4l2_plane_N10v4l2_plane3DOT_7E_t:
-        __u32 mem_offset
-        long unsigned int userptr
+    # AQUI! Tive que comentar pro codigo compilar (sera que o m é usado msm?)
+    #cdef union __v4l2_plane_N10v4l2_plane3DOT_7E_t:
+    #    __u32 mem_offset
+    #    long unsigned int userptr
 
     cdef struct v4l2_plane:
         __u32 bytesused
         __u32 length
-        __v4l2_plane_N10v4l2_plane3DOT_7E_t m
+    #    __v4l2_plane_N10v4l2_plane3DOT_7E_t m
         __u32 data_offset
         __u32 reserved[11]
 
