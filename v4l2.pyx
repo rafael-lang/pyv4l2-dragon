@@ -10,6 +10,7 @@ cimport cturbojpeg as turbojpeg
 cimport numpy as np
 import numpy as np
 cimport test as teste
+import cv2
 
 from libc.stdlib cimport malloc, free
 
@@ -334,6 +335,21 @@ cdef class FrameDragon:
                 u = uv[0:2*uvLength:2].reshape((int(self.height/2), int(self.width/2)))
                 v = uv[1:2*uvLength:2].reshape((int(self.height/2), int(self.width/2)))
                 return y, u, v
+
+    property bgrlang:
+        def __set__(self, val):
+            raise Exception('Read only')
+
+        def __get__(self):
+            if (self._nv_buffer.start[0] != NULL and self._nv_buffer.start[1] != NULL):
+                yLength = self.width*self.height
+                uvLength = int(self.width*self.height/4)
+                y = np.ctypeslib.as_array(<np.uint8_t[:yLength]>self._nv_buffer.start[0], shape=(yLength,)).reshape((self.height, self.width))
+                uv = np.ctypeslib.as_array(<np.uint8_t[:2*uvLength]>self._nv_buffer.start[1], shape=(2*uvLength,)).reshape((int(self.height/2), self.width))
+                yuv = np.concatenate((y, uv))
+                bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_NV12)
+                return yuv, bgr
+            
 
     property yuv:
         def __set__(self,val):
@@ -1201,7 +1217,7 @@ cdef class CaptureDragon:
         # this is taken from the demo but it seams overly causious
         assert(self._active_buffer.index < self._allocated_buf_n)
 
-        print('>> Cap: active buffer: %s'%self._active_buffer.index)
+        #print('>> Cap: active buffer: %s'%self._active_buffer.index)
 
         #now we hold a valid frame
         # print self._active_buffer.timestamp.tv_sec,',',self._active_buffer.timestamp.tv_usec,self._active_buffer.bytesused,self._active_buffer.index
@@ -1399,7 +1415,7 @@ cdef class CaptureDragon:
                 if self.xioctl(v4l2.VIDIOC_QUERYBUF, &buf) == -1:
                     raise Exception("VIDIOC_QUERYBUF")
 
-                print_v4l2_buffer(&buf, v4l2.V4L2_MEMORY_MMAP)
+                #print_v4l2_buffer(&buf, v4l2.V4L2_MEMORY_MMAP)
 
                 for p in range(2):
                     #if False: #dma-export
@@ -1411,7 +1427,7 @@ cdef class CaptureDragon:
                                            mman.MAP_SHARED,
                                            self.dev_handle,
                                            #0)
-                                           buf.m.planes[p].m.mem_offset) #Pq precisei comentar a union no cv4l2.pxd
+                                           (<teste.bbb*>buf.m.planes)[p].m.mem_offset) #Pq precisei comentar a union no cv4l2.pxd
 
                     if <int> b.start[p] == mman.MAP_FAILED:
                         raise Exception("MMAP Error (%s) %s"%(errno, strerror(errno)))
@@ -1731,6 +1747,6 @@ cdef print_v4l2_buffer(v4l2.v4l2_buffer* buf, v4l2.__u32 type):
             print("\t - used:   %d"%buf.m.planes[p].bytesused)
             print("\t - length: %d"%buf.m.planes[p].length)
             if (type == v4l2.V4L2_MEMORY_MMAP):
-                print("\t - offset: %d"%buf.m.planes[p].m.mem_offset)
+                print("\t - offset: %d"%(<teste.bbb*>buf.m.planes)[p].m.mem_offset)
             elif (type == v4l2.V4L2_MEMORY_USERPTR):
-                print("\t - usrptr: %lu"%buf.m.planes[p].m.userptr)
+                print("\t - usrptr: %lu"%(<teste.bbb*>buf.m.planes)[p].m.userptr)

@@ -1,6 +1,7 @@
 import v4l2
 import cv2
 import numpy as np
+import time
 
 # Dragon + D3 Mezzanine
 file = '/dev/video3'
@@ -36,17 +37,23 @@ print('Frame size: %s x %s'%(cap.frame_size[0], cap.frame_size[1]))
 #print('Controls:')
 #print(cap.enum_controls())
 
-# cap.frame_size = (1280, 720)
-# cap.frame_rate = (1,30)
-# controls = cap.enum_controls()
-# print(controls)
-# cap.set_control(controls[0]['id'],controls[0]['default'])
-# print(cap.get_control(controls[0]['id']))
-# print('Will capture at:',cap.transport_format,cap.frame_size,cap.frame_rate)
-for x in range(2000):
+#cap.frame_size = (2592, 1936)
+#cap.frame_rate = (1,30)
+#controls = cap.enum_controls()
+#print(controls)
+#cap.set_control(controls[0]['id'],controls[0]['default'])
+#print(cap.get_control(controls[0]['id']))
+print('Will capture at:',cap.transport_format,cap.frame_size)
+
+ant = time.time()
+r = 3000
+start = time.time()
+for x in range(r):
     try:
+        a = time.time()
         frame = cap.get_frame_part()
-    except IOError: 
+        b = time.time()
+    except IOError:
         print("could not grab frame")
         break
 
@@ -62,13 +69,36 @@ for x in range(2000):
 # 	# print y[].shape
 # 	# print u[]s.shape
 
+#    y,u,v = frame.yuvlang
+#    cv2.imshow("y",y)
+#    cv2.imshow("u",u)
+#    cv2.imshow("v",v)
+#    cv2.waitKey(1)
+
+#    yuv,bgr = frame.bgrlang
+#    c = time.time()
+#    cv2.imshow("img",yuv)
+#    cv2.imshow("img",bgr)
+#    d = time.time()
+#    cv2.waitKey(1)
+
     y,u,v = frame.yuvlang
-    cv2.imshow("y",y)
-    cv2.imshow("u",u)
-    cv2.imshow("v",v)
+    c = time.time()
+    cv2.imshow("img",y)
+    d = time.time()
     cv2.waitKey(1)
 
+    print('   ')
+    print('cap: %.2f'%(1000*(b-a)))
+    print('cvt: %.2f'%(1000*(c-b)))
+    print('dis: %.2f'%(1000*(d-c)))
+    print('fps -d: %.2f'%(1/(c-a)))
+    print('fps: %.2f'%(1/(time.time()-ant)))
+    ant = time.time()
+
 # 	# print img
+
+print('fps_avg: %.2f'%(r/(time.time()-start)))
 
 cap.close()
 cap = None
