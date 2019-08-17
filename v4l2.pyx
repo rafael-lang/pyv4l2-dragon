@@ -35,7 +35,7 @@ cdef class buffer_handle_dragon:
     cdef v4l2.v4l2_plane plane[2]
 
     def __repr__(self):
-        return  "Buffer pointing to %s and %s. length: %s and %s"%(<int>self.start[0], <int>self.start[1], self.length[0], self.length[1])
+        return  "Buffer pointing to %s and %s. length: %s and %s"%(<int>self.start[0], <int>self.start[1], <int>self.length[0], <int>self.length[1])
       
 
     
@@ -300,6 +300,12 @@ cdef class FrameDragon:
     def __cinit__(self):
         # pass        
         # self._jpeg_buffer.start = NULL doing this leads to the very strange behaivour of numpy slicing to break!
+        
+        # FIXME: o proprio autor acima diz que da ruim
+        # Checar se faz sentido
+        #self._nv_buffer.start[0] = NULL
+        #self._nv_buffer.start[1] = NULL
+        
         self._yuv_converted = False
         self._bgr_converted = False
     def __init__(self):
@@ -314,15 +320,18 @@ cdef class FrameDragon:
                 raise Exception("NV12M buffer not used and not allocated.")
             return self._nv_buffer
 
-    property lang:
+    property yuvlang:
         def __set__(self, val):
             raise Exception('Read only')
 
         def __get__(self):
-            cdef np.ndarray[np.uint8_t, ndim=2] Y
-            y_plane_len = self.width*self.height
-            Y = np.asarray(self._nv_buffer[:y_plane_len]).reshape(self.height,self.width)
-            return Y
+            if (self._nv_buffer.start[0] != NULL and self._nv_buffer.start[1] != NULL):
+                yLength = self.width*self.height
+                uvLength = int(self.width*self.height/4)
+                y = np.ctypeslib.as_array(<np.uint8_t[:yLength]>self._nv_buffer.start[0], shape=(yLength,)).reshape((self.height, self.width))
+                u = np.ctypeslib.as_array(<np.uint8_t[:uvLlength]>self._nv_buffer.start[1][0:2*uvLength:2], shape=(uvLength,)).reshape((int(self.height/2), int(self.width/2)))
+                v = np.ctypeslib.as_array(<np.uint8_t[:uvLlength]>self._nv_buffer.start[1][1:2*uvLength:2], shape=(uvLength,)).reshape((int(self.height/2), int(self.width/2)))
+                return y, u, v
 
     property yuv:
         def __set__(self,val):
@@ -1205,7 +1214,7 @@ cdef class CaptureDragon:
 
         if self._transport_format == v4l2.V4L2_PIX_FMT_NV12M:
             print('Habemus NV12M')
-            out_frame.nv12m_buffer(buf)
+            out_frame.nv12m_buffer = buf
             print('...mesmo')
 
 
@@ -1395,7 +1404,8 @@ cdef class CaptureDragon:
 
 
                 for p in range(2):
-                    b.dma_buf_fd[p] = -1
+                    #if False: #dma-export
+                    #    b.dma_buf_fd[p] = -1
                     b.length[p] = buf.m.planes[p].length
                     b.start[p] = mman.mmap(NULL,
                                            buf.m.planes[p].length,
@@ -1408,15 +1418,15 @@ cdef class CaptureDragon:
                     if <int> b.start[p] == mman.MAP_FAILED:
                         raise Exception("MMAP Error (%s) %s"%(errno, strerror(errno)))
 
-                    if False: #dma-export
-                        dma_buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
-                        dma_buf.index = i
-                        dma_buf.plane = p
+                    #if False: #dma-export
+                    #    dma_buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+                    #    dma_buf.index = i
+                    #    dma_buf.plane = p
 
-                        if self.xioctl(v4l2.VIDIOC_EXPBUF, &dma_buf) == -1:
-                            raise Exception("VIDIOC_EXPBUF")
+                    #    if self.xioctl(v4l2.VIDIOC_EXPBUF, &dma_buf) == -1:
+                    #        raise Exception("VIDIOC_EXPBUF")
 
-                        b.dma_buf_fd[p] = dma_buf.fd
+                    #    b.dma_buf_fd[p] = dma_buf.fd
 
                 self.buffers.append(b)
 
