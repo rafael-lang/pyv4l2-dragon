@@ -275,14 +275,14 @@ cdef class Frame:
 cdef class FrameDragon:
     cdef buffer_handle_dragon _nv_buffer
 
-#    def __cinit__(self):
-#        # FIXME: The original author informs that it leads to problems:
-#        # self._jpeg_buffer.start = NULL doing this leads to the very strange behaivour of numpy slicing to break!
-#        #self._nv_buffer.start[0] = NULL
-#        #self._nv_buffer.start[1] = NULL
+    def __cinit__(self):
+        pass
+        # FIXME: The original author informs that it leads to problems:
+        # self._jpeg_buffer.start = NULL doing this leads to the very strange behaivour of numpy slicing to break!
+        #self._nv_buffer.start[0] = NULL
+        #self._nv_buffer.start[1] = NULL
 
     def __init__(self, width, height, timestamp):
-        pass
         self.width = width
         self.height = height
         self.timestamp = timestamp
@@ -290,6 +290,27 @@ cdef class FrameDragon:
         self._yuvAsArray   = False
         self._yuvConverted = False
         self._bgrConverted = False
+
+    property width: 
+        def __set__(self, width):
+            self._w = width
+
+        def __get__(self):
+            return self._w
+
+    property height: 
+        def __set__(self, height):
+            self._h = height
+
+        def __get__(self):
+            return self._h
+
+    property timestamp: 
+        def __set__(self, timestamp):
+            self._time = timestamp
+
+        def __get__(self):
+            return self._time
 
     property nv12m_buffer:
         def __set__(self, buffer_handle_dragon buffer):
