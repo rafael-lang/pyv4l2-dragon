@@ -274,6 +274,14 @@ cdef class Frame:
 
 cdef class FrameDragon:
     cdef buffer_handle_dragon _nv_buffer
+    _w = None
+    _h = None
+    _time = None
+    _yuvAsArray   = False
+    _yuvConverted = False
+    _bgrConverted = False
+
+
 
     def __cinit__(self):
         pass
@@ -286,10 +294,6 @@ cdef class FrameDragon:
         self.width = width
         self.height = height
         self.timestamp = timestamp
-
-        self._yuvAsArray   = False
-        self._yuvConverted = False
-        self._bgrConverted = False
 
     property width: 
         def __set__(self, width):
