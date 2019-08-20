@@ -280,14 +280,12 @@ cdef class FrameDragon:
     cdef bint _yuvConverted
     cdef bint _bgrConverted
 
-    def __cinit__(self, width, height, timestamp):
+    def __cinit__(self):
         # FIXME: The original author informs that it leads to problems:
         # self._jpeg_buffer.start = NULL doing this leads to the very strange behaivour of numpy slicing to break!
         #self._nv_buffer.start[0] = NULL
         #self._nv_buffer.start[1] = NULL
-        self._w    = width
-        self._h    = height
-        #self._time = timestamp
+        
         self._yuvAsArray   = False
         self._yuvConverted = False
         self._bgrConverted = False
@@ -1053,7 +1051,10 @@ cdef class CaptureDragon:
 
         #print('>> Cap: active buffer: %s'%self._active_buffer.index)
 
-        cdef FrameDragon out_frame = FrameDragon(self._frame_size[0], self._frame_size[1], 0)#datetime.now())
+        cdef FrameDragon out_frame = FrameDragon()
+        out_frame.width = self._frame_size[0]
+        out_frame.height = self._frame_size[1]
+        #out_frame.timestamp = datetime.now()
         
         cdef buffer_handle_dragon buf = buffer_handle_dragon()
         for p in range(2):
