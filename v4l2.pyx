@@ -281,17 +281,15 @@ cdef class FrameDragon:
         #self._nv_buffer.start[0] = NULL
         #self._nv_buffer.start[1] = NULL
 
-        self._yuvAsArray   = False
-        self._yuvConverted = False
-        self._bgrConverted = False
-
-
-
     def __init__(self, width, height, timestamp):
         pass
         self.width = width
         self.height = height
         self.timestamp = timestamp
+
+        self._yuvAsArray   = False
+        self._yuvConverted = False
+        self._bgrConverted = False
 
     property nv12m_buffer:
         def __set__(self, buffer_handle_dragon buffer):
@@ -1030,7 +1028,7 @@ cdef class CaptureDragon:
 
         #print('>> Cap: active buffer: %s'%self._active_buffer.index)
 
-        cdef FrameDragon out_frame = FrameDragon(self._frame_size[0], self._frame_size[1], datetime.datetime.now())
+        cdef FrameDragon out_frame = FrameDragon(self._frame_size[0], self._frame_size[1], datetime.now())
         
         cdef buffer_handle_dragon buf = buffer_handle_dragon()
         for p in range(2):
