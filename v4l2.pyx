@@ -274,21 +274,26 @@ cdef class Frame:
 
 cdef class FrameDragon:
     cdef buffer_handle_dragon _nv_buffer
+    cdef int _w
+    cdef int _h
+    cdef bint _yuvAsArray
+    cdef bint _yuvConverted
+    cdef bint _bgrConverted
 
-    def __cinit__(self):
-        pass
+    def __cinit__(self, width, height, timestamp):
         # FIXME: The original author informs that it leads to problems:
         # self._jpeg_buffer.start = NULL doing this leads to the very strange behaivour of numpy slicing to break!
         #self._nv_buffer.start[0] = NULL
         #self._nv_buffer.start[1] = NULL
-
-    def __init__(self, width, height, timestamp):
         self._w    = width
         self._h    = height
-        self._time = timestamp
+        #self._time = timestamp
         self._yuvAsArray   = False
         self._yuvConverted = False
         self._bgrConverted = False
+
+    def __init__(self):
+        pass
 
     property width: 
         def __set__(self, width):
@@ -304,12 +309,12 @@ cdef class FrameDragon:
         def __get__(self):
             return self._h
 
-    property timestamp: 
-        def __set__(self, timestamp):
-            self._time = timestamp
+    #property timestamp: 
+    #    def __set__(self, timestamp):
+    #        self._time = timestamp
 
-        def __get__(self):
-            return self._time
+    #    def __get__(self):
+    #        return self._time
 
     property nv12m_buffer:
         def __set__(self, buffer_handle_dragon buffer):
@@ -1048,7 +1053,7 @@ cdef class CaptureDragon:
 
         #print('>> Cap: active buffer: %s'%self._active_buffer.index)
 
-        cdef FrameDragon out_frame = FrameDragon(self._frame_size[0], self._frame_size[1], datetime.now())
+        cdef FrameDragon out_frame = FrameDragon(self._frame_size[0], self._frame_size[1], 0)#datetime.now())
         
         cdef buffer_handle_dragon buf = buffer_handle_dragon()
         for p in range(2):
