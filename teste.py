@@ -51,7 +51,7 @@ start = time.time()
 for x in range(r):
     try:
         a = time.time()
-        frame = cap.get_frame_part()
+        frame = cap.get_frame()
         b = time.time()
     except IOError:
         print("could not grab frame")
@@ -75,14 +75,20 @@ for x in range(r):
 #    cv2.imshow("v",v)
 #    cv2.waitKey(1)
 
-#    yuv,bgr = frame.bgrlang
+#    yuv,bgr = frame.bgr
 #    c = time.time()
 #    cv2.imshow("img",yuv)
 #    cv2.imshow("img",bgr)
 #    d = time.time()
 #    cv2.waitKey(1)
 
-    y,u,v = frame.yuvlang
+#    y,u,v = frame.yuv
+#    c = time.time()
+#    cv2.imshow("img",y)
+#    d = time.time()
+#    cv2.waitKey(1)
+
+    y = frame.gray
     c = time.time()
     cv2.imshow("img",y)
     d = time.time()
