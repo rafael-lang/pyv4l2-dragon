@@ -279,6 +279,11 @@ cdef class FrameDragon:
     cdef bint _yuvAsArray
     cdef bint _yuvConverted
     cdef bint _bgrConverted
+    cdef np.ndarray _y
+    cdef np.ndarray _u
+    cdef np.ndarray _v
+    cdef np.ndarray _uv
+    cdef np.ndarray _bgr
 
     def __cinit__(self):
         # FIXME: The original author informs that it leads to problems:
@@ -371,7 +376,7 @@ cdef class FrameDragon:
             raise Exception('Read only')
 
         def __get__(self):
-            return self.bgr
+            return self._bgr
 
     def setYUVAsArray(self):
         if not self._yuvAsArray:
